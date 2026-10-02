@@ -1,7 +1,7 @@
 const cache = new Map();
-let TTL = 60 * 1000;
+let cacheTtlMs = 60 * 1000;
 
-function normalizeKey(url) {
+function normalizeCacheKey(url) {
   return url.replace(/\/$/, '') || '/';
 }
 
@@ -10,14 +10,14 @@ function cacheMiddleware(req, res, next) {
     return next();
   }
 
-  const key = normalizeKey(req.originalUrl || req.url);
+  const key = normalizeCacheKey(req.originalUrl || req.url);
   const cachedEntry = cache.get(key);
   const now = Date.now();
 
   if (cachedEntry) {
     const age = now - cachedEntry.createdAt;
 
-    if (age < TTL) {
+    if (age < cacheTtlMs) {
       res.setHeader('X-Cache', 'HIT');
       res.setHeader('X-Cache-Created-At', new Date(cachedEntry.createdAt).toISOString());
       return res.json(cachedEntry.data);
@@ -64,12 +64,12 @@ function invalidateCacheMiddleware(req, res, next) {
   next();
 }
 
-function setTTL(ms) {
-  TTL = ms;
+function setCacheTtl(milliseconds) {
+  cacheTtlMs = milliseconds;
 }
 
-function getTTL() {
-  return TTL;
+function getCacheTtl() {
+  return cacheTtlMs;
 }
 
 function getCacheStore() {
@@ -81,11 +81,7 @@ module.exports = {
   invalidateCacheMiddleware,
   invalidateCache,
   clearCache: invalidateCache,
-  setTTL,
-  getTTL,
+  setCacheTtl,
+  getCacheTtl,
   getCacheStore,
-
-
-
-  
 };

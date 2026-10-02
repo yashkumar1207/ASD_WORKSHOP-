@@ -1,12 +1,12 @@
 const app = require('./server');
-const { setTTL, getTTL, getCacheStore, invalidateCache } = require('./middleware/cacheMiddleware');
+const { setCacheTtl, getCacheTtl } = require('./middleware/cacheMiddleware');
 const fs = require('fs');
 const path = require('path');
 
 const dbPath = path.join(__dirname, 'db.json');
 const originalDbContent = fs.readFileSync(dbPath, 'utf-8');
 
-async function runTests() {
+async function runCacheAndApiTests() {
   const server = app.listen(0);
   const port = server.address().port;
   const baseUrl = `http://localhost:${port}`;
@@ -18,27 +18,27 @@ async function runTests() {
 
   try {
     console.log('TEST 1: GET /products (Initial - Expect Cache MISS)');
-    const t0 = Date.now();
-    const res1 = await fetch(`${baseUrl}/products`);
-    const duration1 = Date.now() - t0;
-    const cacheHeader1 = res1.headers.get('x-cache');
-    const data1 = await res1.json();
-    console.log(`Status: ${res1.status}, X-Cache: ${cacheHeader1}, Time: ${duration1}ms, Items: ${data1.length}`);
-    if (cacheHeader1 !== 'MISS') throw new Error(`Expected X-Cache: MISS, got ${cacheHeader1}`);
-    if (duration1 < 1000) throw new Error(`Expected simulated DB latency >= 1000ms, got ${duration1}ms`);
+    const firstRequestStartedAt = Date.now();
+    const firstProductsResponse = await fetch(`${baseUrl}/products`);
+    const firstRequestDurationMs = Date.now() - firstRequestStartedAt;
+    const firstCacheStatus = firstProductsResponse.headers.get('x-cache');
+    const firstProductList = await firstProductsResponse.json();
+    console.log(`Status: ${firstProductsResponse.status}, X-Cache: ${firstCacheStatus}, Time: ${firstRequestDurationMs}ms, Items: ${firstProductList.length}`);
+    if (firstCacheStatus !== 'MISS') throw new Error(`Expected X-Cache: MISS, got ${firstCacheStatus}`);
+    if (firstRequestDurationMs < 1000) throw new Error(`Expected simulated DB latency >= 1000ms, got ${firstRequestDurationMs}ms`);
     console.log('✓ PASS: Cache MISS on initial request with DB fetch\n');
 
     console.log('TEST 2: GET /products (Second time - Expect Cache HIT)');
-    const t1 = Date.now();
-    const res2 = await fetch(`${baseUrl}/products`);
-    const duration2 = Date.now() - t1;
-    const cacheHeader2 = res2.headers.get('x-cache');
-    const createdAt2 = res2.headers.get('x-cache-created-at');
-    const data2 = await res2.json();
-    console.log(`Status: ${res2.status}, X-Cache: ${cacheHeader2}, Time: ${duration2}ms, CreatedAt: ${createdAt2}`);
-    if (cacheHeader2 !== 'HIT') throw new Error(`Expected X-Cache: HIT, got ${cacheHeader2}`);
-    if (!createdAt2) throw new Error('Expected X-Cache-Created-At header to be present');
-    if (duration2 > 100) throw new Error(`Expected sub-100ms response for cache HIT, got ${duration2}ms`);
+    const secondRequestStartedAt = Date.now();
+    const cachedProductsResponse = await fetch(`${baseUrl}/products`);
+    const cachedRequestDurationMs = Date.now() - secondRequestStartedAt;
+    const cachedResponseStatus = cachedProductsResponse.headers.get('x-cache');
+    const cacheCreatedAt = cachedProductsResponse.headers.get('x-cache-created-at');
+    await cachedProductsResponse.json();
+    console.log(`Status: ${cachedProductsResponse.status}, X-Cache: ${cachedResponseStatus}, Time: ${cachedRequestDurationMs}ms, CreatedAt: ${cacheCreatedAt}`);
+    if (cachedResponseStatus !== 'HIT') throw new Error(`Expected X-Cache: HIT, got ${cachedResponseStatus}`);
+    if (!cacheCreatedAt) throw new Error('Expected X-Cache-Created-At header to be present');
+    if (cachedRequestDurationMs > 100) throw new Error(`Expected sub-100ms response for cache HIT, got ${cachedRequestDurationMs}ms`);
     console.log('✓ PASS: Instant Cache HIT with headers and stored createdAt\n');
 
     console.log('TEST 3: GET /products/1 (Cache MISS then HIT)');
@@ -147,8 +147,8 @@ async function runTests() {
     console.log('✓ PASS: Cache preserved on failed mutation\n');
 
     console.log('TEST 9: TTL (Time to Live) Expiration check');
-    console.log('Current default TTL:', getTTL(), 'ms (1 minute)');
-    setTTL(1000);
+    console.log('Current default TTL:', getCacheTtl(), 'ms (1 minute)');
+    setCacheTtl(1000);
     console.log('Temporarily set TTL to 1000ms for fast test verification');
 
     await fetch(`${baseUrl}/products`);
@@ -173,8 +173,8 @@ async function runTests() {
       throw new Error(`Expected X-Cache: HIT after refreshing cache, got ${cacheHeaderRefreshed}`);
     }
 
-    setTTL(60 * 1000);
-    console.log('Reset TTL back to default:', getTTL(), 'ms (1 minute)');
+    setCacheTtl(60 * 1000);
+    console.log('Reset TTL back to default:', getCacheTtl(), 'ms (1 minute)');
     console.log('✓ PASS: TTL expiration and automatic re-caching working as specified\n');
 
     console.log('========================================');
@@ -187,7 +187,7 @@ async function runTests() {
   }
 }
 
-runTests().catch((err) => {
+runCacheAndApiTests().catch((err) => {
   console.error('\n❌ Test failed:', err);
   try {
     fs.writeFileSync(dbPath, originalDbContent, 'utf-8');

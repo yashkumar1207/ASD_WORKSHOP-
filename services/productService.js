@@ -1,17 +1,17 @@
 const db = require('../database/db');
 
-async function getAllProducts() {
-  return await db.delayReadFile();
+async function listProducts() {
+  return db.readProductsWithSimulatedDelay();
 }
 
-async function getProductById(id) {
-  const products = await db.delayReadFile();
+async function findProductById(id) {
+  const products = await db.readProductsWithSimulatedDelay();
   const product = products.find((item) => item.id === Number(id));
   return product || null;
 }
 
 async function createProduct(productData) {
-  const products = await db.readData();
+  const products = await db.readProducts();
   const nextId = products.length > 0 ? Math.max(...products.map((p) => p.id)) + 1 : 1;
   const newProduct = {
     id: nextId,
@@ -19,12 +19,12 @@ async function createProduct(productData) {
     price: Number(productData.price),
   };
   products.push(newProduct);
-  await db.writeData(products);
+  await db.saveProducts(products);
   return newProduct;
 }
 
 async function updateProduct(id, productData) {
-  const products = await db.readData();
+  const products = await db.readProducts();
   const index = products.findIndex((item) => item.id === Number(id));
   if (index === -1) {
     return null;
@@ -35,12 +35,12 @@ async function updateProduct(id, productData) {
     price: Number(productData.price),
   };
   products[index] = updatedProduct;
-  await db.writeData(products);
+  await db.saveProducts(products);
   return updatedProduct;
 }
 
 async function patchProduct(id, patchData) {
-  const products = await db.readData();
+  const products = await db.readProducts();
   const index = products.findIndex((item) => item.id === Number(id));
   if (index === -1) {
     return null;
@@ -55,24 +55,24 @@ async function patchProduct(id, patchData) {
     updatedProduct.price = Number(patchData.price);
   }
   products[index] = updatedProduct;
-  await db.writeData(products);
+  await db.saveProducts(products);
   return updatedProduct;
 }
 
 async function deleteProduct(id) {
-  const products = await db.readData();
+  const products = await db.readProducts();
   const index = products.findIndex((item) => item.id === Number(id));
   if (index === -1) {
     return null;
   }
   const [deletedProduct] = products.splice(index, 1);
-  await db.writeData(products);
+  await db.saveProducts(products);
   return deletedProduct;
 }
 
 module.exports = {
-  getAllProducts,
-  getProductById,
+  listProducts,
+  findProductById,
   createProduct,
   updateProduct,
   patchProduct,
